@@ -1,0 +1,7 @@
+invoke SetConsoleOutputCP, CP_UTF8  ; Устанавливаем кодировку вывода в UTF-8
+
+; Подготовка к делению
+    mov eax, dividend      ; Переносим делимое в EAX
+    xor edx, edx          ; Обнуляем EDX перед делением (остаток)
+; Выполняем деление
+    div divisor    

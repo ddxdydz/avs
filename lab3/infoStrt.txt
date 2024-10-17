@@ -1,0 +1,19 @@
+ASM Visual можно скачать на офф сайте
+www.masm32.com	-> Download	-> Australia 1
+(при загрузке в папке не должно быть папки masm32)
+
+объединить include и lib в одну папку includes
+!!! из prog.asm удалить includes\...
+вынести prog25.asm в отдельную папку и переидти в неё
+далее команды
+cd C:\avs\lb4
+C:\masm32\bin\ml.exe /c /coff /I"C:\masm32\includes" "prog.asm"
+C:\masm32\bin\link.exe /SUBSYSTEM:CONSOLE /RELEASE /LIBPATH:"C:\masm32\includes" "prog.obj"
+
+"C:\Program Files (x86)\ASM Visual\masm\32\ml.exe" /c /coff /I"C:\Program Files (x86)\ASM Visual\masm\32\includes" "prog25.asm"
+				= путь к загрузочному файлу транслятора, 
+				= /c - без авт компоновки, /coff формат об модуля
+				= Далее указан полный путь к каталогу, содержащему подключаемые файлы
+"C:\Program Files (x86)\ASM Visual\masm\32\link.exe" /SUBSYSTEM:CONSOLE /RELEASE /LIBPATH:"C:\Program Files (x86)\ASM Visual\masm\32\includes" "prog25.obj"
+				= путь к загрузочному файлу компилятора, 
+
