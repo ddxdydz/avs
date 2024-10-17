@@ -1,0 +1,5 @@
+cd C:\avs\lb4
+C:\masm32\bin\ml.exe /c /coff /I"C:\masm32\includes" "prog.asm"
+C:\masm32\bin\link.exe /SUBSYSTEM:CONSOLE /RELEASE /LIBPATH:"C:\masm32\includes" "prog.obj"
+
+
