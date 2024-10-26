@@ -1,8 +1,13 @@
 .386
 .model flat, stdcall
 option casemap:none
-
-include includes\masm32rt.inc
+include includes\windows.inc
+include includes\user32.inc
+include includes\kernel32.inc
+include includes\msvcrt.inc
+includelib includes\user32.lib
+includelib includes\kernel32.lib
+includelib includes\msvcrt.lib
 
 .data
     valueFormat BYTE "Value: %d ", 0
