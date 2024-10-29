@@ -10,15 +10,33 @@ includelib includes\kernel32.lib
 includelib includes\msvcrt.lib
 
 .data
+	buffer db 3 dup(0) ; Массив для хранения 3 чисел
+    bytesRead db 0
+    consoleHandle dd 0
+    
     num1 db 10011001b
     num2 db 01101010b
     num3 db 11100100b
     resultFormat db "Result: %d", 10, 0
+    
     input_buffer db 8 dup(0)
-    bytesRead dd ?
 
 .code
+InputDecimalNumber PROC stdin:DWORD, bufferAdress:DWORD, bsize:DWORD, cdkeyAdress: DWORD, num: ; функция для вычисления модуля, результат в eax
+    mov eax, inputValue
+    cmp eax, 0
+    ; если value >= 0, то не меняем знак
+    jge withoutChangeSign
+    neg eax               
+    withoutChangeSign:
+    ret
+InputDecimalNumber ENDP
+
 start:
+	; Считываем числа
+	invoke GetStdHandle, STD_INPUT_HANDLE
+    invoke ReadConsoleA, eax, addr buffer, 3, addr bytesRead, 0
+    
     ; Извлечение старшей части num1
     mov al, num1
     shr al, 4

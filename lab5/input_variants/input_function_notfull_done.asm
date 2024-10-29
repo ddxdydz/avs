@@ -23,7 +23,6 @@ BSIZE equ 256
 	resultInputFormat db "Input result number%d: ", 0
 	numericCharFormat db "%d", 0
 	newLineFormat db " ", 10, 0
-	testFormat db "Test(%d)", 10, 0
 	resultFormat db "Calculation results: ", 10, 0
 
     stdin dd ?
