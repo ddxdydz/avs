@@ -17,3 +17,7 @@ C:\masm32\bin\link.exe /SUBSYSTEM:CONSOLE /RELEASE /LIBPATH:"C:\masm32\includes"
 "C:\Program Files (x86)\ASM Visual\masm\32\link.exe" /SUBSYSTEM:CONSOLE /RELEASE /LIBPATH:"C:\Program Files (x86)\ASM Visual\masm\32\includes" "prog25.obj"
 				= путь к загрузочному файлу компилятора, 
 
+
+
+http://warmland.ru/cs/masm/quickstart.html
+https://asmdude.wordpress.com/2019/02/14/how-to-compile-and-link-masm-on-windows-10/

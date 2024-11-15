@@ -13,12 +13,30 @@ includelib includes\msvcrt.lib
     input BYTE 10100100b
 
     valueFormat db "Value: %d ", 0
+    numericCharFormat db "%d", 0
+	newLineFormat db " ", 10, 0
     
     input_buffer db 8 dup(0)
     bytesRead dd ?
 
 .code
+; Функция для вывода на экран чисел в двоичном формате
+printBinary PROC number:BYTE
+	mov bl, 8
+	outputCycle:
+		rol number, 1
+		mov al, number
+		and al, 1	; обнуление битов, кроме младшего
+		invoke crt_printf, addr numericCharFormat, al
+		dec bl
+		cmp bl, 0
+		jne outputCycle
+		invoke crt_printf, addr newLineFormat
+	ret
+printBinary ENDP
+
 ; функция, меняющая местами разряды в числе, результат в al
+; digit1, digit2 - номера разрядов с 1 до 8, где 1 - младший, 8 - старший
 Swap PROC inputValue:BYTE, digit1:BYTE, digit2:BYTE
 
     ; Если digit1 > digit2, то меняем их местами,
@@ -77,8 +95,9 @@ Swap ENDP
 
 start:
 	
+	invoke printBinary, input
     invoke Swap, input, 8, 1
-    invoke crt_printf, addr valueFormat, al
+    invoke printBinary, al
     
     invoke GetStdHandle, STD_INPUT_HANDLE
 	invoke ReadConsoleA, eax, addr input_buffer, 7, addr bytesRead, 0

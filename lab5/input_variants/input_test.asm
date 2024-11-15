@@ -35,11 +35,13 @@ BSIZE equ 256
     input_buffer db 8 dup(0)
 .code
 start:
+	invoke AllocConsole
 	invoke GetStdHandle, STD_INPUT_HANDLE; дескриптор консоли ввода 
-    mov stdin, eax; дескриптор сохраняем в переменную
+	mov stdin, eax; дескриптор сохраняем в переменную
     
     @start_input_cycle:
 		invoke crt_printf, addr startMsg
+		invoke ReadConsoleInput, stdin, addr buffer_key_1, BSIZE, addr cdkey; 
 		invoke ReadConsoleInput, stdin, addr buffer_key_1, BSIZE, addr cdkey; 
 		
 		; Проверка Enter 
@@ -51,14 +53,6 @@ start:
 		je @start_input_cycle
 		
 		invoke crt_printf, addr rrFormat, [buffer_key_1 + 14d]
-    
-		; Проверка принадлежности введенного кода заданному диапазону
-		cmp [buffer_key_1 + 14d], 30h
-		jb @start_input_cycle
-		cmp [buffer_key_1 + 14d], 39h
-		ja @start_input_cycle
-		
-		invoke crt_printf, addr rrFormat, 3333333333
 		
 		jmp @start_input_cycle
     @end_input_cycle:
