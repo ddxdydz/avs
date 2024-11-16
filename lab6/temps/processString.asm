@@ -22,8 +22,8 @@ BSIZE equ 256
 	printWordSizeFormat db "size: %d", 0
 	printWordConsonantsFormat db "unique_consonants: %d", 0
 	printWordFormat db "word: ", 0
-
-    inputValue db 'wordAr longwordB wwWwordC sf sdga agd aaaaaaaaaaa aeuyut', 0
+	
+    inputValue db "wordAr     longwordB wwWwordC sf sdga agd aaaaaaaaaaa aeuyut 123R", 0
 
 	outputBuffer db BSIZE dup(?)
 	numberOfBytesAtOutput db 0
@@ -39,7 +39,7 @@ BSIZE equ 256
 	swapFlag db 0  ; индикатор перестановок, используется в сортировке слов
 
 .code
-; Процедура для получения суммы чисел в массиве, результат в eax
+; Процедура для получения суммы чисел в массиве байт, результат в eax
 GetSum PROC lpNums:DWORD, count:BYTE	
     xor eax, eax ; числа будут добавляться из массива к eax в цикле
     mov esi, lpNums
@@ -317,10 +317,10 @@ PrintWord PROC wordIndex:DWORD
 	mov esi, eax
 	invoke GetWordSize, wordIndex
 	mov ecx, eax
-	
 	cld
-
 	FORLOOP:
+		cmp ecx, 0
+		je ENDFOR
 		
 		xor eax, eax
 		lodsb
@@ -329,8 +329,8 @@ PrintWord PROC wordIndex:DWORD
 		pop ecx
 		
 		dec ecx
-		cmp ecx, 0
-		jne FORLOOP
+		jmp FORLOOP
+	ENDFOR:
 
 	invoke crt_printf, addr newlineFormat
 	
@@ -340,7 +340,7 @@ PrintWord PROC wordIndex:DWORD
 	ret
 PrintWord ENDP
 
-; Печать добавленных слов
+; Печать информации о добавленных словах из строки
 PrintCountedWords PROC
 	push eax
 	push ecx
@@ -348,13 +348,13 @@ PrintCountedWords PROC
 	mov ecx, 0
 	FORLOOP:
 		cmp ecx, wordsCount
-		je TOEND
+		je ENDFOR
+		
 		invoke PrintWord, ecx
+		
 		inc ecx
 		jmp FORLOOP
-	TOEND:
-		
-	invoke crt_printf, addr charFormat, 'Z'
+	ENDFOR:
 
 	pop ecx
 	pop eax
@@ -369,10 +369,11 @@ SortWords PROC
 	
 	WHILELOOP:
 		mov swapFlag, 0
+
 		mov ecx, 1
 		FORLOOP:
 			cmp ecx, wordsCount
-			je TOENDFOR
+			je ENDFOR
 			
 			; Получаем количество уникальных согласных предыдущего слова, результат в edx 
 			mov eax, ecx
@@ -390,9 +391,10 @@ SortWords PROC
 			dec eax
 			invoke SwapWords, eax, ecx
 			NOSWAP:
+	
 			inc ecx
 			jmp FORLOOP
-		TOENDFOR:
+		ENDFOR:
 
 		cmp swapFlag, 1
 		je WHILELOOP  ; пока есть перестановки
@@ -441,16 +443,14 @@ ProcessString PROC lpString:DWORD
 
     mov esi, lpString
 	WHILELOOP:
+
 		invoke GetNextWordSize, esi
-		
 		cmp eax, 0
 		je EMPTY  ; Если слово пустое (размер не 0), то не добавляем его
 		invoke AddWord, esi, al
-		
 		EMPTY:
-
 		inc eax
-		add esi, eax
+		add esi, eax  ; смещение на следующее слово
 		
 		mov al, [esi]
 		cmp al, 0

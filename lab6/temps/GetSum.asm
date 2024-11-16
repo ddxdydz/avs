@@ -18,7 +18,7 @@ includelib includes\msvcrt.lib
     inputValue db 1, 0, 2, 5, 0
 
 .code
-; Процедура для получения суммы чисел в массиве, результат в eax
+; Процедура для получения суммы чисел в массиве байт, результат в eax
 GetSum PROC lpNums:DWORD, count:BYTE	
     xor eax, eax ; числа будут добавляться из массива к eax в цикле
     mov esi, lpNums

@@ -1,155 +1,728 @@
-include masm32includemasm32.inc
-include masm32includekernel32.inc
-include masm32includemsvcrt.inc
-includelib masm32libkernel32.lib
-includelib masm32libmsvcrt.lib
+.386
+.model flat, stdcall
+option casemap:none
+include includes\windows.inc
+include includes\user32.inc
+include includes\kernel32.inc
+include includes\msvcrt.inc
+includelib includes\user32.lib
+includelib includes\kernel32.lib
+includelib includes\msvcrt.lib
+
+BSIZE equ 256
 
 .data
-    buffer db "Пример текста для сортировки слов", 0
-    output db "Отсортированные слова: ", 0
-    words db 10 dup(256 dup(0)) ; Массив для хранения слов (10 слов, максимум 256 символов каждое)
+    fileHandler dd ?
+    inputBuffer db BSIZE dup(?)
+    numberOfBytesRead db ? 
+    outputBuffer db BSIZE dup(?)
+	numberOfBytesAtOutput db 0
+
+    inFilePath db "C:\Users\UserLog.ru\Desktop\gh\avs\lab6\files\in.txt", 0
+    outFilePath db "C:\Users\UserLog.ru\Desktop\gh\avs\lab6\files\out.txt", 0
+
+	numFormat db "%d", 10, 0
+	charFormat db "%c", 10, 0
+	strFormat db "%s", 10, 0
+	newlineFormat db " ", 10, 0
+	inLineNumsFormat db "%d, ", 0
+	inLineCharFormat db "%c", 0
+	printIndexFormat db "%d) ", 0
+	printWordSizeFormat db "size: %d", 0
+	printWordConsonantsFormat db "unique_consonants: %d", 0
+	printWordFormat db "word: ", 0
+    printInputTextFormat db " Input text: ", 10, 0
+    printOutputTextFormat db " Output text: ", 10, 0
+    printInputStringFormat db " Input string: ", 0
+    printOutputStringFormat db " Output string: ", 0
+    printStringWordsFormat db " String words: ", 10, 0
+    printSortedWordsFormat db " Sorted words by unique consonants: ", 10, 0
+
+    consonants db 'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z'
+    countedLetterFlags db 32 dup(0)
+
+	; Для хранения информации о словах в строке
+	wordsBases dd 32 dup(0)
+	wordsSizes db 32 dup(0)
+	wordsCount dd 0
+
+	swapFlag db 0  ; индикатор перестановок, используется в сортировке слов
+	
+	currentStringSize dd 0
+	stringNumBuffer db 8 dup(?)
+	stringCount dd 0
+
 .code
+; Процедура для получения суммы чисел в массиве байт, результат в eax
+GetSum PROC lpNums:DWORD, count:BYTE	
+    xor eax, eax ; числа будут добавляться из массива к eax в цикле
+    mov esi, lpNums
+	mov cl, count
+	FORLOOP:
+		mov dl, [esi]
+        add al, dl
+		inc esi
+		dec cl
+		cmp cl, 0
+		jne FORLOOP
+    ret
+GetSum ENDP
+
+; Печать массива чисел в одну строку
+PrintArrayOfBytes PROC lpArray:DWORD, arraySize:BYTE
+	push esi
+	push ecx
+	
+	mov esi, lpArray
+	mov cl, 0
+	FORLOOP:
+		
+		push ecx
+		movzx eax, byte ptr [esi]
+		invoke crt_printf, addr inLineNumsFormat, eax
+		pop ecx
+		
+		inc cl
+		inc esi
+		cmp cl, arraySize
+		jne FORLOOP
+	
+	invoke crt_printf, addr newlineFormat
+	
+	pop ecx
+	pop esi
+	ret
+PrintArrayOfBytes ENDP
+
+; Процедура для получения кода символа в нижнем регистре, результат в eax
+ToLowerCase PROC char:BYTE	
+	xor eax, eax
+    mov al, char
+
+    ; Проверка, что символ в верхнем регистре:
+    cmp char, 'A'
+    jb ToEnd
+    cmp char, 'Z'
+    ja ToEnd
+
+    add al, 32  ; в нижний регистр
+    
+    ToEnd:
+    ret
+ToLowerCase ENDP
+
+; Процедура для проверки является ли символ согласной буквой,
+; В eax записывается 1, если является, иначе 0.
+IsConsonant PROC char:BYTE		
+	push esi 
+	push ecx
+	push edx
+	
+	; в нижний регистр
+	invoke ToLowerCase, char
+	mov char, al
+	
+    mov eax, 1  ; изначально считаем символ согласной буквой
+
+    ; сравниваем символ с каждой согласной буквой из списка consonants
+    mov esi, offset consonants
+    mov cl, sizeof consonants
+	FORLOOP:
+		
+		mov dl, [esi]	; код очередной согласной буквы
+		cmp char, dl
+		je ToEnd	; Если символ совпал с согласной из списка, то выход
+		
+		inc esi
+		dec cl
+		cmp cl, 0
+		jne FORLOOP
+		
+	; Если символ не совпал с символами согласных букв из списка, значит это не согласная
+	mov eax, 0
+	
+	ToEnd:
+	
+	pop edx
+	pop ecx
+	pop esi
+    ret
+IsConsonant ENDP
+
+; Процедура для учёта встречаемости букв
+SetLetterFlag PROC letterCode: BYTE
+	push esi
+	sub letterCode, 'a'
+	mov esi, offset countedLetterFlags
+	add esi, dword ptr letterCode
+	mov byte ptr [esi], 1
+	pop esi
+	ret
+SetLetterFlag ENDP
+
+; Процедура для получения количества уникальных согласных в слове, результат в eax
+CountUniqueConsonants PROC lpWord:DWORD, wordSize:BYTE
+	push esi 
+	push ecx
+	push edx
+	
+	; обнуляем массив с флагами букв
+    invoke RtlZeroMemory, addr countedLetterFlags, sizeof countedLetterFlags
+    
+    mov esi, lpWord
+	mov cl, wordSize
+	FORLOOP:
+
+		mov al, [esi]
+	
+		; Проверка буквы на согласную
+		invoke IsConsonant, al
+		cmp eax, 0
+		je NoConsonant
+		
+		Consonant:
+			mov al, [esi]
+			invoke ToLowerCase, al
+			invoke SetLetterFlag, al  ; Устанавливаем флаг соответствующей буквы
+		
+		NoConsonant:
+
+		inc esi
+		dec cl
+		cmp cl, 0
+		jne FORLOOP
+	
+	; Складываем установленные флаги согласных букв
+	invoke GetSum, addr countedLetterFlags, sizeof countedLetterFlags
+	
+	pop edx
+	pop ecx
+	pop esi
+    ret
+CountUniqueConsonants ENDP
+
+; Получение адреса слова по индексу, результат в eax 
+GetWordBase PROC wordIndex:DWORD 
+	push esi
+	mov esi, offset wordsBases
+	mov eax, wordIndex
+	imul eax, 4
+	add esi, eax
+	mov eax, dword ptr [esi]
+	pop esi
+	ret
+GetWordBase ENDP
+
+; Получение размера слова по индексу, результат в eax 
+GetWordSize PROC wordIndex:DWORD 
+	push esi
+	mov esi, offset wordsSizes
+	add esi, wordIndex
+	xor eax, eax
+	mov al, [esi]
+	pop esi
+	ret
+GetWordSize ENDP
+
+; Получение количества уникальных согласных в слове по индексу, результат в eax 
+GetWordConsonants PROC wordIndex:DWORD 
+	push esi
+	push edx
+	
+	invoke GetWordBase, wordIndex
+	mov edx, eax  ; сохранение адреса слова в edx
+	invoke GetWordSize, wordIndex  ; размер слова в eax
+	invoke CountUniqueConsonants, edx, al
+	
+	pop edx
+	pop esi
+	ret
+GetWordConsonants ENDP
+
+; Вставка информации о слове в заданную позицию
+InsertWord PROC lpWord:DWORD, wordSize:BYTE, insertIndex:DWORD
+	push esi
+	push eax
+
+	; Добавляем адрес слова
+	mov esi, offset wordsBases
+	mov eax, insertIndex
+	imul eax, 4
+	add esi, eax
+	mov eax, lpWord
+	mov [esi], eax
+
+	; Добавляем размер слова
+	mov esi, offset wordsSizes
+	add esi, insertIndex
+	mov al, wordSize
+	mov [esi], al
+	
+	pop eax
+	pop esi
+	
+	ret
+InsertWord ENDP
+
+; Добавление информации о слове
+AddWord PROC lpWord:DWORD, wordSize:BYTE
+
+	; Добавляем информацию о слове в конец
+	invoke InsertWord, lpWord, wordSize, wordsCount
+
+	; Увеличиваем счётчик добавленных слов
+	inc wordsCount
+
+	ret
+AddWord ENDP
+
+; Поменять местами слова в массивах для хранения информации слов
+SwapWords PROC wordIndex1:DWORD, wordIndex2:DWORD
+	push eax
+	push ebx
+	push ecx
+	push edx
+
+	invoke GetWordBase, wordIndex1
+	mov ebx, eax  ; сохраняем адрес 1-го слова
+	invoke GetWordSize, wordIndex1
+	mov dl, al  ; сохраняем размер 1-го слова
+
+	invoke GetWordBase, wordIndex2
+	mov ecx, eax  ; сохраняем адрес 2-го слова
+	invoke GetWordSize, wordIndex2
+	mov dh, al  ; сохраняем размер 2-го слова
+
+	; Меняем местами слова
+	invoke InsertWord, ebx, dl, wordIndex2
+	invoke InsertWord, ecx, dh, wordIndex1
+
+	mov swapFlag, 1
+
+	pop edx
+	pop ecx
+	pop ebx
+	pop eax
+	ret
+SwapWords ENDP
+
+; Обнуление счётчика добавленных слов 
+ClearWords PROC
+	mov wordsCount, 0	; обнуляем счётчик слов
+	ret
+ClearWords ENDP
+
+; Печать строки
+PrintString PROC lpString:DWORD, stringSize:DWORD
+	push esi
+	push eax
+	push ecx
+	
+	mov esi, lpString
+	mov ecx, stringSize
+	cld
+	FORLOOP:
+		cmp ecx, 0
+		je ENDFOR
+		
+		xor eax, eax
+		lodsb
+		push ecx
+		invoke crt_printf, addr inLineCharFormat, eax
+		pop ecx
+		
+		dec ecx
+		jmp FORLOOP
+	ENDFOR:
+
+	invoke crt_printf, addr newlineFormat
+	
+	pop ecx
+	pop eax
+	pop esi
+	ret
+PrintString ENDP
+
+; Печать слова по индексу
+PrintWord PROC wordIndex:DWORD
+	push esi
+	push eax
+	push ecx
+	
+	invoke GetWordBase, wordIndex
+	mov esi, eax
+	invoke GetWordSize, wordIndex
+	mov ecx, eax
+	cld
+	FORLOOP:
+		cmp ecx, 0
+		je ENDFOR
+		
+		xor eax, eax
+		lodsb
+		push ecx
+		invoke crt_printf, addr inLineCharFormat, eax
+		pop ecx
+		
+		dec ecx
+		jmp FORLOOP
+	ENDFOR:
+	
+	pop ecx
+	pop eax
+	pop esi
+	ret
+PrintWord ENDP
+
+; Информации о слове по индексу
+PrintWordWithInfo PROC wordIndex:DWORD
+	push esi
+	push eax
+	push ecx
+	
+	invoke crt_printf, addr printIndexFormat, wordIndex
+	invoke GetWordSize, wordIndex
+	invoke crt_printf, addr printWordSizeFormat, eax
+	invoke crt_printf, addr inLineCharFormat, '	'
+	invoke GetWordConsonants, wordIndex
+	invoke crt_printf, addr printWordConsonantsFormat, eax
+	invoke crt_printf, addr inLineCharFormat, '	'
+	invoke crt_printf, addr printWordFormat
+	
+	invoke PrintWord, wordIndex
+	
+	invoke crt_printf, addr newlineFormat
+	
+	pop ecx
+	pop eax
+	pop esi
+	ret
+PrintWordWithInfo ENDP
+
+; Печать информации о добавленных словах в столбец
+PrintWordsWithInfo PROC
+	push eax
+	push ecx
+
+	mov ecx, 0
+	FORLOOP:
+		cmp ecx, wordsCount
+		je ENDFOR
+		
+		invoke PrintWordWithInfo, ecx
+		
+		inc ecx
+		jmp FORLOOP
+	ENDFOR:
+
+	pop ecx
+	pop eax
+	ret
+PrintWordsWithInfo ENDP
+
+; Печать добавленных слов в строку через пробел
+PrintWordsInLine PROC
+	push eax
+	push ecx
+
+	mov ecx, 0
+	FORLOOP:
+		cmp ecx, wordsCount
+		je ENDFOR
+		
+		push ecx
+		invoke PrintWord, ecx
+		invoke crt_printf, addr inLineCharFormat, " "
+		pop ecx
+		
+		inc ecx
+		jmp FORLOOP
+	ENDFOR:
+		
+	invoke crt_printf, addr newlineFormat
+
+	pop ecx
+	pop eax
+	ret
+PrintWordsInLine ENDP
+
+; Добавление слова в буффер для вывода
+AddWordToOutputBuffer PROC wordIndex:DWORD
+	push esi
+	push edi
+	push eax
+	push ecx
+	
+	invoke GetWordBase, wordIndex
+	mov esi, eax
+	mov edi, offset outputBuffer
+	movzx eax, numberOfBytesAtOutput
+	add edi, eax
+	invoke GetWordSize, wordIndex
+	mov ecx, eax
+	add numberOfBytesAtOutput, cl
+	cld
+	rep movsb
+	
+	pop ecx
+	pop eax
+	pop edi
+	pop esi
+	ret
+AddWordToOutputBuffer ENDP
+
+; Добавление строки в буффер для вывода, в конце строки должен быть 0-й байт
+AddStringToOutputBuffer PROC lpString:DWORD
+	push esi
+	push edi
+	
+	mov edi, offset outputBuffer
+	movzx eax, numberOfBytesAtOutput
+	add edi, eax
+	
+	cld
+	
+	mov esi, lpString
+	mov ecx, 0
+	FORLOOP:
+		mov al, [esi]
+		cmp al, 0
+		je ENDFOR
+		
+		stosb
+		inc numberOfBytesAtOutput
+		
+		inc esi
+		jmp FORLOOP
+	ENDFOR:
+	
+	pop edi
+	pop esi
+	ret
+AddStringToOutputBuffer ENDP
+
+; Добавление символа в буффер для вывода
+AddCharToOutputBuffer PROC char:DWORD
+	push esi
+
+	mov esi, offset outputBuffer
+	inc numberOfBytesAtOutput
+	movzx eax, numberOfBytesAtOutput
+	add esi, eax
+
+	mov al, byte ptr char
+	mov [esi], al
+
+	pop esi
+	ret
+AddCharToOutputBuffer ENDP
+
+; Добавление строки в буффер для вывода
+AddWordsToOutputBuffer PROC
+	push eax
+	push ecx
+	
+	; Добавление нумерации строк
+    invoke RtlZeroMemory, addr stringNumBuffer, sizeof stringNumBuffer
+	invoke wsprintf, addr stringNumBuffer, addr printIndexFormat, stringCount
+	invoke AddStringToOutputBuffer, offset stringNumBuffer
+
+	mov ecx, 0
+	FORLOOP:
+		cmp ecx, wordsCount
+		je ENDFOR
+		
+		invoke AddWordToOutputBuffer, ecx
+		invoke AddCharToOutputBuffer, 32
+		
+		inc ecx
+		jmp FORLOOP
+	ENDFOR:
+	
+	invoke AddStringToOutputBuffer, offset newlineFormat
+
+	pop ecx
+	pop eax
+	ret
+AddWordsToOutputBuffer ENDP
+
+; Процедура для сортировки слов в массивах для учёта слов
+SortWords PROC
+	push ebx
+	push ecx
+	push edx
+	
+	WHILELOOP:
+		mov swapFlag, 0
+
+		mov ecx, 1
+		FORLOOP:
+			cmp ecx, wordsCount
+			jae ENDFOR  ; если ecx >= wordsCount
+			
+			; Получаем количество уникальных согласных предыдущего слова, результат в edx 
+			mov eax, ecx
+			dec eax
+			invoke GetWordConsonants, eax
+			mov edx, eax
+			
+			; Получаем количество уникальных согласных текущего слова, результат в eax 
+			invoke GetWordConsonants, ecx
+			
+			; Проверяем, нужно ли поменять слова местами
+			cmp edx, eax
+			jbe NOSWAP  ; если edx <= eax, то не меняем слова местами
+			mov eax, ecx
+			dec eax
+			invoke SwapWords, eax, ecx
+			NOSWAP:
+	
+			inc ecx
+			jmp FORLOOP
+		ENDFOR:
+
+		cmp swapFlag, 1
+		je WHILELOOP  ; пока есть перестановки
+	
+	pop edx
+	pop ecx
+	pop ebx
+	ret
+SortWords ENDP
+
+; Получение размера 1-го слова в строке, результат в eax
+GetNextWordSize PROC lpString:DWORD
+	push esi
+	push ecx
+
+	xor ecx, ecx  ; обнуление счётчика количества букв в слове
+    mov esi, lpString
+	WHILELOOP:
+		mov al, [esi]
+
+		; Проверка, что символ является буквой:
+		invoke ToLowerCase, al
+    	cmp al, 'a'
+    	jb TOEND
+    	cmp al, 'z'
+    	ja TOEND
+		
+		inc ecx  ; увеличение счётчика количества букв в слове
+		inc esi
+		jmp WHILELOOP
+	TOEND:
+
+	mov eax, ecx
+	
+	pop ecx
+	pop esi
+	ret
+GetNextWordSize ENDP
+
+; Процедура для сохранения информации о словах в строке
+; В строке должно быть не более 32 слов
+; Строка должна оканчиваться 0 байтом
+; В eax помещается размер обработанной строки
+ProcessString PROC lpString:DWORD
+	push esi
+
+    mov esi, lpString
+	WHILELOOP:
+		
+		; Добавляем обработанные слова
+		invoke GetNextWordSize, esi
+		cmp eax, 0
+		je EMPTY  ; Если слово пустое (размер не 0), то не добавляем его
+		invoke AddWord, esi, al
+		EMPTY:
+		inc eax
+		add esi, eax  ; смещение на следующее слово
+		
+		; Проверяем завершение строки
+		mov al, [esi]
+		cmp al, 10
+		je ENDWHILE  ; Если перенос строки
+		cmp al, 0
+		je ENDWHILE  ; Если конец текста
+		
+		jmp WHILELOOP
+	ENDWHILE:
+
+	mov eax, esi
+	sub eax, lpString
+
+	pop esi
+    ret
+ProcessString ENDP
+
 start:
-    ; Разделение строки на слова
-    invoke SplitWords, addr buffer, addr words
+	; Чтение файла in.txt
+    invoke CreateFileA, offset inFilePath, GENERIC_READ, 0, 0, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0
+    mov fileHandler, eax
+    invoke SetFilePointer, fileHandler, 0, 0, FILE_BEGIN
+    invoke ReadFile, fileHandler, addr inputBuffer, sizeof inputBuffer - 1, addr numberOfBytesRead, 0
+    invoke CloseHandle, fileHandler
+    
+    ; Добавление нулевого байта в конец прочитанного текста для обозначения окончания
+    mov esi, offset inputBuffer
+    inc numberOfBytesRead
+    add esi, dword ptr numberOfBytesRead
+    mov [esi], byte ptr 0
+    
+    ; Вывод в консоль прочитанного текста
+    invoke crt_printf, addr printInputTextFormat
+    invoke PrintString, offset inputBuffer, numberOfBytesRead
+    invoke crt_printf, addr newlineFormat
 
-    ; Сортировка слов по количеству уникальных согласных
-    invoke SortWords, addr words
+    ; Обработка строк в файле in.txt
+    mov esi, offset inputBuffer
+	WHILELOOP:
+		
+		invoke ProcessString, esi
+		mov currentStringSize, eax
+		inc stringCount
+		
+		invoke crt_printf, addr printInputStringFormat
+		invoke PrintString, esi, currentStringSize
+		
+        invoke crt_printf, addr printStringWordsFormat
+        invoke PrintWordsWithInfo
+       
+        invoke crt_printf, addr printSortedWordsFormat
+        invoke SortWords
+        invoke PrintWordsWithInfo
+        
+        invoke crt_printf, addr printOutputStringFormat
+        invoke PrintWordsInLine
+        invoke crt_printf, addr newlineFormat
+        
+        invoke AddWordsToOutputBuffer
+        
+        invoke ClearWords
+        
+        inc currentStringSize
+		add esi, currentStringSize  ; смещение на начало следующей строки
+		
+		mov ecx, esi
+		sub ecx, offset inputBuffer  ; количество обработанных символов
+		movzx eax, numberOfBytesRead
+		cmp ecx, eax
+		jb WHILELOOP  ; Если не конец ввода, ecx < numberOfBytesRead
+	
+	; Вывод в консоль результата
+	invoke crt_printf, addr printOutputTextFormat
+	invoke PrintString, offset outputBuffer, numberOfBytesAtOutput
 
-    ; Вывод результата
-    invoke StdOut, addr output
-    invoke PrintSortedWords, addr words
+    ; Запись результата в файл out.txt
+    invoke CreateFileA, offset outFilePath, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 
+    mov fileHandler, eax
+    invoke SetFilePointer, fileHandler, 0, 0, FILE_BEGIN
+    invoke WriteFile, fileHandler, addr outputBuffer, numberOfBytesAtOutput, 0, 0  
+    invoke CloseHandle, fileHandler
+    
+    ; Вызов функции для ввода, чтобы консоль не закрывалась сразу после выполнения
+    invoke GetStdHandle, STD_INPUT_HANDLE
+	invoke ReadConsoleA, eax, ebx, 8, 0, 0
 
-    ; Завершение программы
     invoke ExitProcess, 0
-
-; Процедура для разделения строки на слова
-SplitWords proc str:DWORD, words:DWORD
-    local word:DWORD
-    local count:DWORD
-    mov count, 0
-
-    ; Указатель на начало строки
-    mov eax, str
-
-next_word:
-    ; Пропускаем пробелы
-    while byte ptr [eax] == ' '
-        inc eax
-    endwhile
-
-    ; Если достигли конца строки, выходим
-    cmp byte ptr [eax], 0
-    je done
-
-    ; Сохранение адреса текущего слова
-    mov word, eax
-
-    ; Копируем слово в массив words
-    lea edi, [words + count * 256]
-    
-copy_word:
-    ; Копируем символы слова
-    mov al, [eax]
-    cmp al, ' '
-    je end_copy_word
-    mov [edi], al
-    inc edi
-    inc eax
-    jmp copy_word
-
-end_copy_word:
-    mov byte ptr [edi], 0 ; Завершаем строку нулем
-    inc count              ; Увеличиваем счетчик слов
-    jmp next_word         ; Переход к следующему слову
-
-done:
-    mov dword ptr [words + count * 256], 0 ; Завершаем массив слов нулем
-    ret
-SplitWords endp
-
-; Процедура для подсчета уникальных согласных букв в слове
-CountUniqueConsonants proc word:DWORD
-    local consonants:DWORD
-    local unique_count:DWORD
-    mov consonants, 0
-    mov unique_count, 0
-
-    ; Массив для хранения согласных (используем битовую маску)
-    local mask db 0 ; Битовая маска для согласных (26 бит для каждой буквы)
-
-next_char:
-    mov al, [word]
-    cmp al, 0
-    je done_count
-
-    ; Проверяем, является ли буква согласной (например, в русском языке)
-    cmp al, 'А'
-    jb skip_char
-    cmp al, 'Я'
-    ja skip_char
-    
-    ; Если это согласная буква (например, Б, В, Г и т.д.)
-    ; Можно использовать более сложную проверку для русского алфавита
-
-skip_char:
-    inc word
-    jmp next_char
-
-done_count:
-    ret
-CountUniqueConsonants endp
-
-; Процедура для сортировки слов (пузырьковая сортировка)
-SortWords proc words:DWORD
-    local i:DWORD, j:DWORD, temp:DWORD
-
-outer_loop:
-    mov i, 0
-
-inner_loop:
-    mov eax, [words + i * 256]
-    mov ebx, [words + (i + 1) * 256]
-
-    ; Подсчет уникальных согласных для каждого слова
-    invoke CountUniqueConsonants, eax
-    mov ecx, eax          ; Сохраняем количество уникальных согласных первого слова
-    invoke CountUniqueConsonants, ebx
-    cmp ecx, eax         ; Сравниваем с количеством второго слова
-
-    jg swap_words         ; Если первое слово больше - меняем местами
-
-skip_swap:
-    inc i                 ; Переходим к следующему слову
-    cmp byte ptr [words + (i + 1) * 256], 0 ; Проверка на конец массива слов
-    jne inner_loop        ; Если не конец - продолжаем внутренний цикл
-
-outer_end:
-    ret
-
-swap_words:
-    ; Меняем местами слова в массиве words
-    mov temp, [words + i * 256]
-    mov [words + i * 256], [words + (i + 1) * 256]
-    mov [words + (i + 1) * 256], temp
-    
-    jmp skip_swap         ; Возвращаемся к пропуску обмена
-
-SortWords endp
-
-; Процедура для вывода отсортированных слов
-PrintSortedWords proc words:DWORD
-    local word:DWORD
-
-print_loop:
-    mov eax, [words]
-    cmp eax, 0            ; Проверка на конец массива слов
-    je done_printing
-    
-    invoke StdOut, eax   ; Выводим слово на экран
-    
-done_printing:
-    ret
-PrintSortedWords endp
-
 end start
