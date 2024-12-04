@@ -8,7 +8,7 @@
 
 
 int main() { 
-    int a, b, c, d, e, f, h, k, m;
+    int a, b, c, d, e, f, g, h, k, m;
     double result = 0;
     int delay; 
     int process_number = 0;
@@ -22,16 +22,16 @@ int main() {
     
     srand(time(NULL)); 
     
-    while((fscanf(fp, "%d %d %d %d %d %d %d %d %d\n", &a, &b, &c, &d, &e, &f, &h, &k, &m))!=EOF) {
+    while((fscanf(fp, "%d %d %d %d %d %d %d %d %d %d\n", &a, &b, &c, &d, &e, &f, &g, &h, &k, &m))!=EOF) {
         delay = 1 + rand() % 4;  // Задержка от 1 до 4 секунд
         process_number++;
         if (fork() == 0) {
             sleep(delay);
             printf("Завершение процесса №%d с задержкой %d сек. ", process_number, delay);
-            if (f == 0 || m == 0) {
+            if (e == 0 || k == 0 || (f * g + h / k) == 0) {
                 printf("OШИБКА: Деление на 0\n");
             } else {
-                result = a * (b + c) + d + e / f + (h + k) / m;
+                result = (a * b * c + d / e) / (f * g + h / k) + m;
                 printf("Pезультат: %.2f\n", result);
             }
             return 0;
