@@ -540,15 +540,6 @@ start:
 		invoke ProcessString, esi
 		mov currentStringSize, eax
 		inc stringCount
-		
-		; Вывод обрабатываемой строки на экран (Input string: ...)
-		invoke crt_printf, addr printInputStringFormat
-		invoke PrintString, esi, currentStringSize
-        
-        ; Вывод добавленных слов из текущей строки на экран (Output string: ...)
-        invoke crt_printf, addr printOutputStringFormat
-        invoke PrintWordsInLine
-        invoke crt_printf, addr newlineFormat
         
         invoke AddWordsToOutputBuffer
 
