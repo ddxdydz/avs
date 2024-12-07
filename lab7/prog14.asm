@@ -26,7 +26,7 @@ BSIZE equ 256
 	varValueFormat db "Entered var?: ", 0
 	resultFormat db "Result: ", 10, 0
 	errorZeroDivision db "Error: ZeroDivision", 10, 0
-	functionString db "ab + cd + e/(f + g) + (h + k)m = ", 0
+	functionString db "(ab + c + de + f/g)+(h + k/m) = ", 0
 
     stdin dd ?
     stdout dd ?
@@ -168,7 +168,7 @@ start:
     invoke PrintVarValue, offset varM, 'M'
     invoke WriteConsoleA, stdout, offset newline, 1, 0, 0
     
-    ; Вычисление выражения по частям: ab + cd + e/(f + g) + (h + k)m
+    ; Вычисление выражения по частям: ab + c + de + f/g + h + k/m
     mov result, 0
     
     ; ab
@@ -176,24 +176,33 @@ start:
     mul varB
     add result, eax
     
-    ; cd
+    ; + c
     mov eax, varC
-    mul varD
     add result, eax
     
-    ; e/(f + g)
-    mov eax, varE
-    mov ecx, varF
-    add ecx, varG
+    ; + de
+    mov eax, varD
+    mul varE
+    add result, eax
+    
+    ; + f/g
+    mov eax, varF
+    mov ecx, varG
     cmp ecx, 0
     je ZeroDivision  ; Проверка деления на 0
     div ecx
     add result, eax
     
-    ; (h + k)m
+    ; + h
     mov eax, varH
-    add eax, varK
-    mul varM
+    add result, eax
+    
+    ; + k/m
+    mov eax, varK
+    mov ecx, varM
+    cmp ecx, 0
+    je ZeroDivision  ; Проверка деления на 0
+    div ecx
     add result, eax
     
     ; Вывод результата вычислений
