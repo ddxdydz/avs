@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#define FIFO_NAME "fifo12"
+#define FIFO_NAME "fifo_12b"
 #define TRIPLE_SIZE 3
 #define RAND_RANGE 4
 
@@ -28,28 +28,30 @@ int compare_triples(int triple1[TRIPLE_SIZE], int triple2[TRIPLE_SIZE]) {
 }
 
 int main() {
-    // Открытие именованных каналов
-    int fd_write = open(FIFO_NAME, O_WRONLY);
-    int fd_read = open(FIFO_NAME, O_RDONLY);
+    srand(time(NULL));
+    
+    int fd_write;
+    int fd_read;
     int triple[TRIPLE_SIZE];
     int received_triple[TRIPLE_SIZE];
 
     while (1) {
+        fd_write = open(FIFO_NAME, O_WRONLY);
         generate_random_triple(triple);
         write(fd_write, triple, sizeof(triple));
         printf("Child sent: %d %d %d\n", triple[0], triple[1], triple[2]);
+        close(fd_write);
 
+        fd_read = open(FIFO_NAME, O_RDONLY);
         read(fd_read, received_triple, sizeof(received_triple));
         printf("Child received: %d %d %d\n", received_triple[0], received_triple[1], received_triple[2]);
+        close(fd_read);
 
         if (compare_triples(triple, received_triple)) {
             printf("Child: Found matching triples!\n");
             break;
         }
     }
-
-    close(fd_write);
-    close(fd_read);
 
     return 0;
 }

@@ -6,9 +6,10 @@
 #include <string.h>
 #include <time.h>
 
-#define FIFO_NAME "fifo12"
+#define FIFO_1 "fifo1"
+#define FIFO_2 "fifo2"
 #define TRIPLE_SIZE 3
-#define RAND_RANGE 4
+#define RAND_RANGE 1
 
 void generate_random_triple(int triple[TRIPLE_SIZE]) {
     for (int i = 0; i < TRIPLE_SIZE; i++) {
@@ -28,11 +29,11 @@ int compare_triples(int triple1[TRIPLE_SIZE], int triple2[TRIPLE_SIZE]) {
 }
 
 int main() {
-    // Создание именованных каналов
-    mkfifo(FIFO_NAME, S_IFIFO | 0666);
-    mkfifo(FIFO_NAME, S_IFIFO | 0666);
-    int fd_write = open(FIFO_NAME, O_WRONLY);
-    int fd_read = open(FIFO_NAME, O_RDONLY);
+    mkfifo(FIFO_1, S_IFIFO | 0666);
+    mkfifo(FIFO_2, S_IFIFO | 0666);
+
+    int fd_write = open(FIFO_1, O_WRONLY);
+    int fd_read = open(FIFO_2, O_RDONLY);
     int triple[TRIPLE_SIZE];
     int received_triple[TRIPLE_SIZE];
 
@@ -53,7 +54,8 @@ int main() {
     close(fd_write);
     close(fd_read);
     
-    unlink(FIFO_NAME);
+    unlink(FIFO_1);
+    unlink(FIFO_2);
 
     return 0;
 }
